@@ -1,18 +1,13 @@
 /**
- * sw.js — ASChat Service Worker v5
- *
- * Fixes in v5:
- *  - Scope-agnostic: works whether served from / or /ASCHATS/ or any subpath
- *  - notificationclick: uses self.location.origin + relative URL correctly
- *  - isClientFocusedOnChat: no longer relies on client.focused (unreliable on Android)
- *  - Better cache strategy: network-first for HTML, cache-first for assets
- *  - Handles 'dismiss' action same as 'close' on all notification types
+ * sw.js — ASChat Service Worker v6
+ * 
+ * Fixes for GitHub Pages subdirectory: /ogchat/
  */
 
 const CACHE_VERSION = 'aschat-v7';
 const STATE_CACHE   = 'aschat-sw-state-v2';
-const STATE_URL     = '/__sw_state__';
 const SW_BASE = self.location.pathname.replace(/\/sw\.js$/, '') || '';
+const STATE_URL     = SW_BASE + '/__sw_state__';
 
 // Assets to precache on install — paths relative to SW location
 const STATIC_ASSETS = [
@@ -52,7 +47,6 @@ self.addEventListener('install', (event) => {
       );
     })
   );
-  // Take over immediately — don't wait for old SW to be idle
   self.skipWaiting();
 });
 
@@ -67,7 +61,6 @@ self.addEventListener('activate', (event) => {
       )
     )
   );
-  // Claim all open clients immediately so new SW controls existing tabs
   self.clients.claim();
 });
 
@@ -122,9 +115,7 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// ─── WEB PUSH EVENT (app fully closed) ───────────────────────────────────────
-// This fires when the Railway backend calls webpush.sendNotification().
-// The browser/OS wakes this service worker even if no tab is open.
+// ─── WEB PUSH EVENT ───────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
@@ -139,7 +130,6 @@ self.addEventListener('push', (event) => {
   if (!data.type) return;
 
   event.waitUntil((async () => {
-    // If the user is already viewing this chat, suppress the notification
     const focused = data.senderID ? await isClientFocusedOnChat(data.senderID) : false;
     if (focused) return;
 
@@ -191,7 +181,6 @@ self.addEventListener('push', (event) => {
           timestamp:   data.timestamp || Date.now()
         });
       default:
-        // Generic fallback
         return self.registration.showNotification(data.title || 'ASChat', {
           body:   data.body || 'New notification',
           icon:   SW_BASE + '/icons/icon-192.png',
@@ -235,7 +224,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// ─── SW STATE (persisted across restarts) ────────────────────────────────────
+// ─── SW STATE ────────────────────────────────────────────────────
 const swState = {
   totalUnread:           0,
   unreadChats:           [],
@@ -243,7 +232,6 @@ const swState = {
   lastReengagementShown: 0,
   userName:              ''
 };
-
 
 async function persistState() {
   try {
@@ -264,21 +252,20 @@ async function restoreState() {
   } catch (e) {}
 }
 
-// ─── PERIODIC SYNC ────────────────────────────────────────────────────────────
+// ─── PERIODIC SYNC ───────────────────────────────────────────────
 self.addEventListener('periodicsync', (event) => {
   if (event.tag === 'aschat-reengagement') {
     event.waitUntil(restoreState().then(() => maybeShowReengagement()));
   }
 });
 
-// ─── BACKGROUND SYNC (online fallback) ────────────────────────────────────────
 self.addEventListener('sync', (event) => {
   if (event.tag === 'aschat-reengagement') {
     event.waitUntil(restoreState().then(() => maybeShowReengagement()));
   }
 });
 
-// ─── RE-ENGAGEMENT ────────────────────────────────────────────────────────────
+// ─── RE-ENGAGEMENT ───────────────────────────────────────────────
 const REENGAGEMENT_MIN_AWAY_MS = 15 * 60 * 1000;
 const REENGAGEMENT_COOLDOWN_MS = 60 * 60 * 1000;
 const REENGAGEMENT_TAG         = 'reengagement';
@@ -341,14 +328,13 @@ function cancelReengagementNotification() {
     .catch(() => {});
 }
 
-// ─── NOTIFICATION BUILDERS ────────────────────────────────────────────────────
+// ─── NOTIFICATION BUILDERS ────────────────────────────────────────
 
 async function showMessageNotification(data) {
   const { senderName, senderID, text, senderPhoto, timestamp } = data;
   const focused = await isClientFocusedOnChat(senderID);
   if (focused) return;
 
-  // Close re-engagement — real message takes priority
   const reeng = await self.registration.getNotifications({ tag: REENGAGEMENT_TAG });
   reeng.forEach(n => n.close());
 
@@ -394,7 +380,7 @@ async function showCallNotification(data) {
     badge:              SW_BASE + '/icons/icon-192.png',
     tag:                'call-' + callerID,
     renotify:           true,
-    requireInteraction: true,   // Stays on screen until user acts — like WhatsApp
+    requireInteraction: true,
     silent:             false,
     vibrate:            [500, 200, 500, 200, 500, 200, 500],
     timestamp:          timestamp || Date.now(),
@@ -414,7 +400,6 @@ async function dismissCallNotification(callerID) {
 async function showMissedCallNotification(data) {
   const { callerName, callerID, callType, callerPhoto, timestamp } = data;
 
-  // Close the ringing call notification first
   await dismissCallNotification(callerID);
 
   const icon    = callType === 'video' ? '📹' : '📞';
@@ -469,7 +454,7 @@ async function clearNotificationsForChat(otherID) {
   }
 }
 
-// ─── NOTIFICATION CLICK ───────────────────────────────────────────────────────
+// ─── NOTIFICATION CLICK ───────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   const notification = event.notification;
   const action       = event.action;
@@ -477,14 +462,12 @@ self.addEventListener('notificationclick', (event) => {
 
   notification.close();
 
-  // Decline call: send message to any open window so it can fire the decline RTC signal
   if (data.type === 'call' && action === 'decline') {
     event.waitUntil(
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
         if (clients.length > 0) {
           clients.forEach(c => c.postMessage({ type: 'DECLINE_CALL_FROM_NOTIFICATION', callerID: data.callerID }));
         } else {
-          // No window open — open chat so user can see missed call
           const chatURL = buildChatURL(data.callerID, data.callerName);
           return self.clients.openWindow(chatURL);
         }
@@ -493,18 +476,13 @@ self.addEventListener('notificationclick', (event) => {
     return;
   }
 
-  // Dismiss / close — just close, no navigation
   if (action === 'close' || action === 'dismiss') return;
 
-  // 'open', 'accept', or tap on notification body — navigate to chat
   const targetURL = data.url || (SW_BASE + '/chats.html');
-
   event.waitUntil(navigateToURL(targetURL));
 });
 
-// ─── NOTIFICATION CLOSE ───────────────────────────────────────────────────────
 self.addEventListener('notificationclose', (event) => {
-  // If user dismisses a call notification (swipes away), treat as decline
   if (event.notification.tag && event.notification.tag.startsWith('call-')) {
     const data = event.notification.data || {};
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients =>
@@ -513,23 +491,15 @@ self.addEventListener('notificationclose', (event) => {
   }
 });
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// ─── HELPERS ──────────────────────────────────────────────────────
 
-/**
- * Build a chat URL that works regardless of hosting subpath.
- * SW_BASE is computed from sw.js's own location.
- */
 function buildChatURL(userID, userName) {
   return `${SW_BASE}/chat.html?id=${encodeURIComponent(userID)}&name=${encodeURIComponent(userName || '')}`;
 }
 
-/**
- * Navigate an existing window to targetURL or open a new one.
- */
 async function navigateToURL(targetURL) {
   const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 
-  // Try to find an existing window at the exact chat URL
   const targetPath   = new URL(targetURL, self.location.origin);
   const targetID     = targetPath.searchParams.get('id');
   const targetIsChat = targetPath.pathname.endsWith('chat.html');
@@ -544,7 +514,6 @@ async function navigateToURL(targetURL) {
     } catch (e) {}
   }
 
-  // Navigate any open app window
   for (const client of clients) {
     if ('navigate' in client) {
       try {
@@ -553,7 +522,6 @@ async function navigateToURL(targetURL) {
     }
   }
 
-  // Open fresh window
   return self.clients.openWindow(targetURL);
 }
 
@@ -564,11 +532,6 @@ async function isAppOpen() {
   } catch (e) { return false; }
 }
 
-/**
- * FIX: Don't use client.focused — unreliable on Android Chrome.
- * Instead check if a window is open on the correct chat URL,
- * and whether the page is visible (not hidden/backgrounded).
- */
 async function isClientFocusedOnChat(otherID) {
   try {
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
@@ -584,4 +547,4 @@ async function isClientFocusedOnChat(otherID) {
     }
   } catch (e) {}
   return false;
-}
+  }
