@@ -1,10 +1,10 @@
 {
-  "id": "/",
+  "id": "/ogchat/",
   "name": "ASChat",
   "short_name": "ASChat",
   "description": "Simple, fast, and private messaging",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/ogchat/",
+  "scope": "/ogchat/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait",
@@ -12,25 +12,25 @@
   "theme_color": "#4F46E5",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/ogchat/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192.png",
+      "src": "/ogchat/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/ogchat/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/ogchat/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -38,14 +38,14 @@
   ],
   "screenshots": [
     {
-      "src": "/icons/icon-512.png",
+      "src": "/ogchat/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "ASChat messaging screen"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/ogchat/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "wide",
@@ -58,15 +58,15 @@
       "name": "Open Chats",
       "short_name": "Chats",
       "description": "Go to your chats",
-      "url": "/chats.html",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "url": "/ogchat/chats.html",
+      "icons": [{ "src": "/ogchat/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "New Message",
       "short_name": "Message",
       "description": "Start a new chat",
-      "url": "/chats.html",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "url": "/ogchat/chats.html",
+      "icons": [{ "src": "/ogchat/icons/icon-192.png", "sizes": "192x192" }]
     }
   ],
   "prefer_related_applications": false
